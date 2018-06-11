@@ -1,0 +1,2 @@
+model_checkpoint_path: "div5"
+all_model_checkpoint_paths: "div5"
