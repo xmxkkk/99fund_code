@@ -10,7 +10,7 @@ while True:
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     data = urllib.request.urlopen(req).read()
 
-    with open('./9427.jpg','wb') as f:
+    with open('./temp.jpg','wb') as f:
         f.write(data)
 
     str=""
@@ -20,4 +20,4 @@ while True:
             break
 
     if len(str)==4:
-        shutil.move('./9427.jpg','./code/{}.jpg'.format(str))
+        shutil.move('./temp.jpg','./code/{}.jpg'.format(str))

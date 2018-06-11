@@ -113,12 +113,12 @@ class V2Model(Model):
         with open('0000.png', 'wb') as f:
             f.write(data)
 
-        y_pred, labels = self.predict_image("0000.png", "/Users/xmx/Desktop/pyspace/wutong_code/")
+        y_pred, labels = self.predict_image("0000.png")
         print(y_pred)
 
 
-    def predict_image(self,file,path):
-        img = cv2.imread(path+file)
+    def predict_image(self,file):
+        img = cv2.imread(file)
         img = img[:, :, 0]
         img2 = img.flatten()
         abc = pd.value_counts(img2)
@@ -213,10 +213,10 @@ class V2Model(Model):
         lst=list(map(lambda x:self.label_str[x],lst))
         return np.array(lst).reshape(shp)
 
-model = V2Model('v2', True)
+model = V2Model('v2', False)
 
 model.predict_url()
-# y_pred,labels=model.predict_image("9427.jpg","/Users/xmx/Desktop/pyspace/wutong_code/")
+# y_pred,labels=model.predict_image("/Users/xmx/Desktop/pyspace/wutong_code/9427.jpg")
 # print(y_pred)
 # print(model.transfer(np.argmax(labels,axis=1)))
 # model.train()
