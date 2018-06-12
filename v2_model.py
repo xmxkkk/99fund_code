@@ -7,6 +7,7 @@ from v2_input_data import images,labels
 import cv2
 import pandas as pd
 import urllib
+import shutil
 
 class V2Model(Model):
     def __init__(self, model_name, show_val):
@@ -68,7 +69,7 @@ class V2Model(Model):
                 )
                 print("no={}      ,loss={:.4f},accuracy={:.4f},time={:.2f}".format(i, loss_val, accuracy_val[0],
                                                                                    time.time() - start_time))
-                if i % 20 == 0 and i > 0:
+                if i % 200 == 0 and i > 0:
                     test_start = (test_idx % test_page_no * test_batch_size) % test_total
                     test_end = (test_idx % test_page_no * test_batch_size + test_batch_size) % test_total
                     if test_end == 0:
@@ -100,11 +101,20 @@ class V2Model(Model):
             if os.path.exists('./model/{}/{}.index'.format(self.model_name, self.model_name)):
                 saver.restore(sess, './model/{}/{}'.format(self.model_name, self.model_name))
 
-            y_pred_val=sess.run([y_pred],feed_dict={self.images:datas})
-            print(type(y_pred_val[0]))
-            ndata=np.array(y_pred_val).reshape((-1,))
+            batch_size=10
+            total=datas.shape[0]
+            page_no=int(total/batch_size)
 
-            return self.transfer(ndata)
+            result=[]
+            for i in range(page_no):
+                start=i*batch_size
+                end=i*batch_size+batch_size
+
+                y_pred_val=sess.run([y_pred],feed_dict={self.images:datas[start:end]})
+                ndata=np.array(y_pred_val).reshape((-1,))
+
+                result.append(self.transfer(ndata))
+            return np.array(result).flatten()
     def predict_url(self):
         url = 'https://passport.99fund.com/cif/login/loginVerifyCode.htm?time=1528702116568'
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
@@ -113,12 +123,60 @@ class V2Model(Model):
         with open('0000.png', 'wb') as f:
             f.write(data)
 
-        y_pred, labels = self.predict_image("0000.png", "/Users/xmx/Desktop/pyspace/wutong_code/")
+        y_pred, labels = self.predict_image("0000.png")
         print(y_pred)
 
+    def predict_make(self):
 
-    def predict_image(self,file,path):
-        img = cv2.imread(path+file)
+        idx=0
+
+        url = 'https://passport.99fund.com/cif/login/loginVerifyCode.htm?time=1528702116568'
+
+        while idx<10000:
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            data = urllib.request.urlopen(req).read()
+
+            file='./newcode/'+str(idx).zfill(4)+'.png'
+            with open(file, 'wb') as f:
+                f.write(data)
+
+            idx=idx+1
+            if idx%8==0:
+                time.sleep(1)
+
+    def predict_image_rename(self,files,path):
+        images = []
+
+        for file in files:
+            if not file.endswith('png'):
+                continue
+            img = cv2.imread(path+file)
+            img = img[:, :, 0]
+            img2 = img.flatten()
+            abc = pd.value_counts(img2)
+            for x in abc.index:
+                if abc[x] > 30:
+                    abc = abc.drop(x)
+            for x in abc.index:
+                img[img == x] = 0
+
+            img[img != 0] = 1
+
+            img = img[:, :, np.newaxis]
+            images.append(img[:, 7:27, :])
+            images.append(img[:, 27:47, :])
+            images.append(img[:, 47:67, :])
+            images.append(img[:, 67:87, :])
+
+
+        y_pred=self.predict(np.array(images)).tolist()
+        for i in range(int(len(y_pred)/4)):
+            shutil.move(path+files[i],'./rename_newcode/'+''.join(y_pred[i*4:i*4+4])+'_'+str(random.randint(0,10000))+'.png')
+
+
+
+    def predict_image(self,file):
+        img = cv2.imread(file)
         img = img[:, :, 0]
         img2 = img.flatten()
         abc = pd.value_counts(img2)
@@ -153,7 +211,9 @@ class V2Model(Model):
         conv1_2 = tf.layers.conv2d(conv1_1, 32, kernel_size=(3, 3), activation=tf.nn.relu)
         pool1 = tf.layers.max_pooling2d(conv1_2, (3, 3), (2, 2))
 
-        conv2_1 = tf.layers.conv2d(pool1, 128, kernel_size=(3, 3), activation=tf.nn.relu)
+        dropout0 = tf.layers.dropout(pool1, rate=0.5)
+
+        conv2_1 = tf.layers.conv2d(dropout0, 128, kernel_size=(3, 3), activation=tf.nn.relu)
         conv2_2 = tf.layers.conv2d(conv2_1, 128, kernel_size=(3, 3), activation=tf.nn.relu)
         pool2 = tf.layers.max_pooling2d(conv2_2, (3, 3), (2, 2))
 
@@ -201,7 +261,7 @@ class V2Model(Model):
         return score, acc, tf.argmax(dense2, axis=1)
 
     def get_file(self):
-        n_split=1300
+        n_split=3800
         return images[:n_split],labels[:n_split],images[n_split:],labels[n_split:]
 
     def transfer(self,datas):
@@ -213,10 +273,12 @@ class V2Model(Model):
         lst=list(map(lambda x:self.label_str[x],lst))
         return np.array(lst).reshape(shp)
 
-model = V2Model('v2', True)
+model = V2Model('v2', False)
 
-model.predict_url()
-# y_pred,labels=model.predict_image("9427.jpg","/Users/xmx/Desktop/pyspace/wutong_code/")
+# model.predict_make()
+model.predict_image_rename(os.listdir('./newcode/'),'./newcode/')
+#
+# y_pred,labels=model.predict_image("/Users/xmx/Desktop/pyspace/wutong_code/9427.jpg")
 # print(y_pred)
 # print(model.transfer(np.argmax(labels,axis=1)))
 # model.train()
