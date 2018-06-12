@@ -261,7 +261,7 @@ class V2Model(Model):
         return score, acc, tf.argmax(dense2, axis=1)
 
     def get_file(self):
-        n_split=3800
+        n_split=1300
         return images[:n_split],labels[:n_split],images[n_split:],labels[n_split:]
 
     def transfer(self,datas):
