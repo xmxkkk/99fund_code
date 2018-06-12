@@ -13,6 +13,7 @@ class V2Model(Model):
     def __init__(self, model_name, show_val):
         self.images = tf.placeholder(tf.float32, [None, 30, 20, 1])
         self.labels = tf.placeholder(tf.int32, [None, 10])
+        self.dropout_rate = tf.placeholder(tf.float32)
         self.model_name = model_name
         self.show_val = show_val
 
@@ -34,7 +35,7 @@ class V2Model(Model):
             plt.show()
 
         loss, accuracy, _ = self.build()
-        train_op = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(loss)
+        train_op = tf.train.GradientDescentOptimizer(learning_rate=0.0001).minimize(loss)
 
         with tf.Session() as sess:
             sess.run(tf.group(tf.global_variables_initializer(), tf.local_variables_initializer()))
@@ -65,11 +66,12 @@ class V2Model(Model):
                 start_time = time.time()
                 _, loss_val, accuracy_val = sess.run(
                     [train_op, loss, accuracy]
-                    , feed_dict={self.images: x_train[start:end], self.labels: y_train[start:end]}
+                    , feed_dict={self.images: x_train[start:end], self.labels: y_train[start:end], self.dropout_rate:
+                        0.5}
                 )
                 print("no={}      ,loss={:.4f},accuracy={:.4f},time={:.2f}".format(i, loss_val, accuracy_val[0],
                                                                                    time.time() - start_time))
-                if i % 200 == 0 and i > 0:
+                if i % 50 == 0 and i > 0:
                     test_start = (test_idx % test_page_no * test_batch_size) % test_total
                     test_end = (test_idx % test_page_no * test_batch_size + test_batch_size) % test_total
                     if test_end == 0:
@@ -78,7 +80,9 @@ class V2Model(Model):
 
                     loss_val, accuracy_val = sess.run(
                         [loss, accuracy],
-                        feed_dict={self.images: x_test[test_start:test_end], self.labels: y_test[test_start:test_end]}
+                        feed_dict={self.images: x_test[test_start:test_end], self.labels: y_test[
+                                                                                          test_start:test_end],
+                                   self.dropout_rate:0.}
                     )
 
                     saver.save(sess, "./model/{}/{}".format(self.model_name, self.model_name))
@@ -110,7 +114,7 @@ class V2Model(Model):
                 start=i*batch_size
                 end=i*batch_size+batch_size
 
-                y_pred_val=sess.run([y_pred],feed_dict={self.images:datas[start:end]})
+                y_pred_val=sess.run([y_pred],feed_dict={self.images:datas[start:end],self.dropout_rate:0.})
                 ndata=np.array(y_pred_val).reshape((-1,))
 
                 result.append(self.transfer(ndata))
@@ -132,7 +136,7 @@ class V2Model(Model):
 
         url = 'https://passport.99fund.com/cif/login/loginVerifyCode.htm?time=1528702116568'
 
-        while idx<10000:
+        while idx<400:
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
             data = urllib.request.urlopen(req).read()
 
@@ -141,16 +145,18 @@ class V2Model(Model):
                 f.write(data)
 
             idx=idx+1
-            if idx%8==0:
+            if idx%5==0:
                 time.sleep(1)
 
     def predict_image_rename(self,files,path):
         images = []
 
+        filenames=[]
         for file in files:
             if not file.endswith('png'):
                 continue
             img = cv2.imread(path+file)
+            # img = cv2.resize(img, (93, 18))
             img = img[:, :, 0]
             img2 = img.flatten()
             abc = pd.value_counts(img2)
@@ -168,15 +174,17 @@ class V2Model(Model):
             images.append(img[:, 47:67, :])
             images.append(img[:, 67:87, :])
 
+            filenames.append(file)
 
         y_pred=self.predict(np.array(images)).tolist()
         for i in range(int(len(y_pred)/4)):
-            shutil.move(path+files[i],'./rename_newcode/'+''.join(y_pred[i*4:i*4+4])+'_'+str(random.randint(0,10000))+'.png')
-
+            shutil.move(path+filenames[i],'./rename_newcode/'+''.join(y_pred[i*4:i*4+4])+'_'+str(random.randint(0,
+                                                                                                        10000))+'.png')
 
 
     def predict_image(self,file):
         img = cv2.imread(file)
+        # img = cv2.resize(img, (93, 18))
         img = img[:, :, 0]
         img2 = img.flatten()
         abc = pd.value_counts(img2)
@@ -207,19 +215,23 @@ class V2Model(Model):
         return self.predict(images),label
 
     def build(self):
-        conv1_1 = tf.layers.conv2d(self.images, 32, kernel_size=(3, 3), activation=tf.nn.relu)
-        conv1_2 = tf.layers.conv2d(conv1_1, 32, kernel_size=(3, 3), activation=tf.nn.relu)
+        conv1_1 = tf.layers.conv2d(self.images, 32, kernel_size=(3, 3),padding='SAME', activation=tf.nn.relu)
+        conv1_2 = tf.layers.conv2d(conv1_1, 64, kernel_size=(3, 3),padding='SAME', activation=tf.nn.relu)
         pool1 = tf.layers.max_pooling2d(conv1_2, (3, 3), (2, 2))
 
-        dropout0 = tf.layers.dropout(pool1, rate=0.5)
-
-        conv2_1 = tf.layers.conv2d(dropout0, 128, kernel_size=(3, 3), activation=tf.nn.relu)
-        conv2_2 = tf.layers.conv2d(conv2_1, 128, kernel_size=(3, 3), activation=tf.nn.relu)
+        conv2_1 = tf.layers.conv2d(pool1, 128, kernel_size=(3, 3),padding='SAME', activation=tf.nn.relu)
+        conv2_2 = tf.layers.conv2d(conv2_1, 256, kernel_size=(3, 3),padding='SAME', activation=tf.nn.relu)
         pool2 = tf.layers.max_pooling2d(conv2_2, (3, 3), (2, 2))
 
-        # flatten1=tf.reshape(pool2,(None,-1))
-        flatten1 = tf.contrib.layers.flatten(pool2)
-        dropout1 = tf.layers.dropout(flatten1, rate=0.5)
+        conv3_1 = tf.layers.conv2d(pool2, 128, kernel_size=(3, 3), padding='SAME', activation=tf.nn.relu)
+        conv3_2 = tf.layers.conv2d(conv3_1, 256, kernel_size=(3, 3), padding='SAME', activation=tf.nn.relu)
+        pool3 = tf.layers.max_pooling2d(conv3_2, (3, 3), (2, 2))
+
+        flatten1 = tf.contrib.layers.flatten(pool3)
+
+        dense1 = tf.layers.dense(flatten1,512,activation=tf.nn.relu)
+
+        dropout1 = tf.layers.dropout(dense1, rate=self.dropout_rate)
         dense2 = tf.layers.dense(dropout1, 10)
         score = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=dense2))
         acc = tf.metrics.accuracy(labels=tf.argmax(self.labels, axis=1),predictions=tf.argmax(dense2, axis=1))
@@ -261,7 +273,7 @@ class V2Model(Model):
         return score, acc, tf.argmax(dense2, axis=1)
 
     def get_file(self):
-        n_split=1300
+        n_split=6400
         return images[:n_split],labels[:n_split],images[n_split:],labels[n_split:]
 
     def transfer(self,datas):
@@ -273,7 +285,7 @@ class V2Model(Model):
         lst=list(map(lambda x:self.label_str[x],lst))
         return np.array(lst).reshape(shp)
 
-model = V2Model('v2', False)
+model = V2Model('v2_2', True)
 
 # model.predict_make()
 model.predict_image_rename(os.listdir('./newcode/'),'./newcode/')

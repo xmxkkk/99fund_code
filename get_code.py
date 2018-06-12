@@ -1,8 +1,5 @@
 from urllib.request import urlopen
-import ssl
-from urllib.request import urlretrieve
 import urllib
-import os
 import shutil
 
 while True:

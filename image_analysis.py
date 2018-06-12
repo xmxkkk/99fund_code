@@ -3,7 +3,11 @@ import cv2
 
 def read_file(file):
     img=cv2.imread(file)
+    print(img.shape)
+    # img=cv2.resize(img, (93, 10))
+
     img=np.array(img)
+    print(img.shape)
 
     # 0 46 47:93
     # 4 25
@@ -27,4 +31,4 @@ def read_file(file):
 # read_file('./code/2870.jpg')
 # read_file('./code/3122.jpg')
 # read_file('./code/5315.jpg')
-read_file('./0000.png')
+read_file('./error/0004_8823.png')
